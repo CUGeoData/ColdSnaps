@@ -38,9 +38,9 @@ class Panel:
     weather: pd.DataFrame  # index: date, columns: WEATHER_COLS + derived
     buildings: list[str]
 
-    def series(self, building: str) -> pd.Series:
+    def series(self, building: str, target: str = "kw") -> pd.Series:
         e = self.energy
-        return e.loc[e["building"] == building].set_index("date")["kw"]
+        return e.loc[e["building"] == building].set_index("date")[target]
 
 
 def add_weather_features(w: pd.DataFrame) -> pd.DataFrame:

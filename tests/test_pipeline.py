@@ -19,7 +19,9 @@ def panel():
 
 def test_one_row_per_building_day(panel):
     assert not panel.energy.duplicated(["building", "date"]).any()
-    assert len(panel.buildings) == 133
+    # 133 single-meter buildings minus KaneSportsComplex & MeinigFieldhouse,
+    # whose data starts after the weather record ends.
+    assert len(panel.buildings) == 131
 
 
 def test_weather_complete_and_degree_days_in_fahrenheit(panel):
@@ -52,3 +54,46 @@ def test_sum_policy_adds_multi_meter_buildings():
     p = load_panel(meter_policy="sum")
     assert len(p.buildings) > 133
     assert "KlarmanHall" in p.buildings
+
+
+def test_forecast_weather_uses_only_past(panel):
+    from coldsnaps.forecast_weather import CACHE, MAX_LEAD, ForecastWeather
+
+    if not CACHE.exists():
+        pytest.skip("Open-Meteo forecast cache not downloaded")
+    fw = ForecastWeather(panel.weather)
+    o = pd.Timestamp("2026-01-20")
+    dates = pd.date_range(o, periods=14)
+    w = fw(o, dates)
+    assert list(w.index) == list(dates) and w["temperature_2m_mean"].notna().all()
+    # Climatology days must not change if the actual future weather changes.
+    altered = panel.weather.copy()
+    altered.loc[o:, "temperature_2m_mean"] += 30
+    w2 = ForecastWeather(altered)(o, dates)
+    np.testing.assert_allclose(w["temperature_2m_mean"].iloc[MAX_LEAD:], w2["temperature_2m_mean"].iloc[MAX_LEAD:])
+
+
+def test_lgbm_quantiles_ordered(panel):
+    from coldsnaps.models import LightGBMGlobal
+
+    b = panel.buildings[:4]
+    m = LightGBMGlobal(n_estimators=20, train_step=14, calib_days=120)
+    m.fit(panel, pd.Timestamp("2025-08-01"), buildings=b)
+    tasks = make_tasks(panel, "2025-08-01", "2025-09-15", 14, 7, b)
+    point, q = m.predict_quantiles(panel, tasks, 14)
+    assert q.shape == (len(tasks), 14, 9)
+    assert (np.diff(q, axis=-1) >= -1e-9).all()
+
+
+def test_cold_snap_scenario_only_touches_snap_days(panel):
+    from coldsnaps.scenarios import ColdSnapScenario
+
+    o = pd.Timestamp("2026-01-05")
+    dates = pd.date_range(o, periods=14)
+    base = ColdSnapScenario(panel.weather, 0)(o, dates)
+    cold = ColdSnapScenario(panel.weather, 10, snap_days=(4, 10))(o, dates)
+    d_temp = (cold["temperature_2m_mean"] - base["temperature_2m_mean"]).to_numpy()
+    np.testing.assert_allclose(d_temp, [0] * 3 + [-10] * 7 + [0] * 4)
+    # Winter: every degree colder is one more HDD.
+    np.testing.assert_allclose((cold["hdd"] - base["hdd"]).iloc[3:10], 10)
+    np.testing.assert_allclose(base["temperature_2m_mean"], panel.weather.loc[dates, "temperature_2m_mean"])
