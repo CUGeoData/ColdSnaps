@@ -1,4 +1,6 @@
---extra-index-url https://download.pytorch.org/whl/cpu
+# Install torch first for your hardware, then `pip install -r requirements.txt`:
+#   CPU laptop:            pip install torch --index-url https://download.pytorch.org/whl/cpu
+#   NVIDIA Spark (GB10):   pip install torch --index-url https://download.pytorch.org/whl/cu130
 torch
 timesfm>=3.0.2
 numpy

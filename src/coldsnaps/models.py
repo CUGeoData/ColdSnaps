@@ -205,8 +205,23 @@ REGISTRY = {
     "seasonal_naive": SeasonalNaive,
     "degree_day": DegreeDayRegression,
     "lgbm": LightGBMGlobal,
-    "timesfm": lambda: TimesFM(use_weather=False),
-    "timesfm_weather": lambda: TimesFM(use_weather=True),
-    "timesfm_weather_all": lambda: TimesFM(use_weather=True, covariates=WEATHER_COLS,
-                                           name="timesfm_weather_all"),
+    "timesfm": lambda **kw: TimesFM(use_weather=False, **kw),
+    "timesfm_weather": lambda **kw: TimesFM(use_weather=True, **kw),
+    "timesfm_weather_all": lambda **kw: TimesFM(use_weather=True, covariates=WEATHER_COLS,
+                                                name="timesfm_weather_all", **kw),
 }
+
+
+def make_model(name: str, device: str = "auto", batch_size: int | None = None):
+    """Instantiate a REGISTRY model; device/batch_size only apply to TimesFM.
+    device="auto" picks CUDA when available."""
+    if not name.startswith("timesfm"):
+        return REGISTRY[name]()
+    if device == "auto":
+        import torch
+
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+    kw = {"device": device}
+    if batch_size:
+        kw["batch_size"] = batch_size
+    return REGISTRY[name](**kw)

@@ -17,7 +17,7 @@ from coldsnaps.backtest import run_backtest  # noqa: E402
 from coldsnaps.data import load_panel  # noqa: E402
 from coldsnaps.forecast_weather import ForecastWeather  # noqa: E402
 from coldsnaps.metrics import peak_report, report  # noqa: E402
-from coldsnaps.models import REGISTRY  # noqa: E402
+from coldsnaps.models import make_model  # noqa: E402
 
 
 def main():
@@ -32,12 +32,14 @@ def main():
     p.add_argument("--target", default="kw", choices=["kw", "max_kw"])
     p.add_argument("--weather", default="observed", choices=["observed", "forecast"],
                    help="future weather: observed (upper bound) or archived Open-Meteo forecasts")
+    p.add_argument("--device", default="auto", help="TimesFM device: auto, cuda or cpu")
+    p.add_argument("--batch-size", type=int, default=None, help="TimesFM batch size (default 32)")
     p.add_argument("--out", default="baseline")
     a = p.parse_args()
 
     panel = load_panel(meter_policy=a.meter_policy)
     buildings = a.buildings.split(",") if a.buildings else None
-    models = [REGISTRY[m]() for m in a.models.split(",")]
+    models = [make_model(m, a.device, a.batch_size) for m in a.models.split(",")]
     future_weather = ForecastWeather(panel.weather) if a.weather == "forecast" else None
     res = run_backtest(panel, models, a.test_start, a.test_end, a.horizon, a.step, buildings,
                        target=a.target, future_weather=future_weather)

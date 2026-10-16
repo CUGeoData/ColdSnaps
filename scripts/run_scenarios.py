@@ -18,7 +18,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from coldsnaps.backtest import make_tasks  # noqa: E402
 from coldsnaps.data import load_panel  # noqa: E402
-from coldsnaps.models import REGISTRY  # noqa: E402
+from coldsnaps.models import make_model  # noqa: E402
 from coldsnaps.scenarios import ColdSnapScenario, empirical_hdd_slope, scenario_sensitivity  # noqa: E402
 
 SNAP_DAYS = (4, 10)
@@ -32,6 +32,8 @@ def main():
     p.add_argument("--n-buildings", type=int, default=40)
     p.add_argument("--train-end", default="2025-08-01")
     p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--device", default="auto", help="TimesFM device: auto, cuda or cpu")
+    p.add_argument("--batch-size", type=int, default=None, help="TimesFM batch size (default 32)")
     p.add_argument("--out", default="scenarios")
     a = p.parse_args()
 
@@ -45,7 +47,7 @@ def main():
 
     results = {d: [] for d in deltas}
     for name in a.models.split(","):
-        m = REGISTRY[name]()
+        m = make_model(name, a.device, a.batch_size)
         # Global models train on all buildings (as in the backtest), only before train_end.
         m.fit(panel, pd.Timestamp(a.train_end))
         for d in deltas:
